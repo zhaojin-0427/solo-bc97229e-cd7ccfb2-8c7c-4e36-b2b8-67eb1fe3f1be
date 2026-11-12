@@ -1,0 +1,41 @@
+services:
+  sftp:
+    # 本地 SFTP 源，模拟外包实验室投递服务器
+    image: atmoz/sftp:debian
+    container_name: pharma-sftp
+    command: ["lab:labpass:1001"]
+    ports:
+      - "2222:22"
+    volumes:
+      - sftp-data:/home/lab
+      - ./sftp/seed:/seed:ro
+      - ./sftp/seed-on-start.sh:/etc/sftp.d/seed-on-start.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/22 && echo ok >&3"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    container_name: pharma-ingest-api
+    environment:
+      SFTP_HOST: sftp
+      SFTP_PORT: "22"
+      SFTP_USER: lab
+      SFTP_PASSWORD: labpass
+      REMOTE_INBOUND: /inbound
+      REMOTE_ARCHIVE: /archive
+      DB_PATH: /data/ingest.db
+      SCAN_INTERVAL_SECONDS: "10"
+    ports:
+      - "8000:8000"
+    volumes:
+      - api-data:/data
+    depends_on:
+      sftp:
+        condition: service_healthy
+
+volumes:
+  sftp-data:
+  api-data:
